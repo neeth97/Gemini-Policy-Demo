@@ -1,9 +1,11 @@
 from dotenv import load_dotenv
 import streamlit as st
 import os
+import glob
 from PIL import Image
 import google.generativeai as genai
 import docx
+import pandas as pd
 
 # Load environment variables
 load_dotenv()
@@ -53,18 +55,58 @@ def input_image_setup(uploaded_file):
         return [{"mime_type": uploaded_file.type, "data": bytes_data}]
     return None
 
+# Function to process multiple images
+def process_images(image_paths):
+    results = []
+    for image_path in image_paths:
+        with open(image_path, "rb") as img_file:
+            image_data = [{"mime_type": "image/jpeg", "data": img_file.read()}]
+        response = get_gemini_response(image_data, policy_rules)
+        results.append(response)
+    return results
+
 # Streamlit App
 st.set_page_config(page_title="Invoice Analyzer")
 st.header("Invoice Analysis with Gemini AI")
 
-uploaded_file = st.file_uploader("Upload an invoice image...", type=["jpg", "jpeg", "png"])
+# Process all images in /sample-invoice folder
+image_folder = "./sample-invoice"
+image_paths = glob.glob(os.path.join(image_folder, "*.jpg")) + \
+               glob.glob(os.path.join(image_folder, "*.jpeg")) + \
+               glob.glob(os.path.join(image_folder, "*.png"))
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Invoice.", width=300)
+if image_paths:
+    st.subheader("Processing Invoices from /sample-invoice Folder")
+    extracted_data = process_images(image_paths)
     
-    image_data = input_image_setup(uploaded_file)
-    if image_data:
-        response = get_gemini_response(image_data, policy_rules)
-        st.subheader("Extracted Invoice Details:")
-        st.write(response)
+    # Convert extracted data into a structured format
+    table_data = []
+    for idx, data in enumerate(extracted_data):
+        details = data.split("\n")  # Assuming newline-separated output
+        table_data.append([image_paths[idx].split("/")[-1]] + details)
+    
+    # Convert to DataFrame for display
+    df = pd.DataFrame(table_data, columns=["Invoice Image", "Company Name", "Total Amount", "Expense Type", "Approval Status"])
+    st.dataframe(df)
+
+# Upload additional invoices
+st.subheader("Upload More Invoices for Analysis")
+uploaded_files = st.file_uploader("Upload invoice images...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+
+if uploaded_files:
+    uploaded_results = []
+    for uploaded_file in uploaded_files:
+        image_data = input_image_setup(uploaded_file)
+        if image_data:
+            response = get_gemini_response(image_data, policy_rules)
+            uploaded_results.append(response)
+    
+    # Convert uploaded data into a structured format
+    uploaded_table_data = []
+    for idx, data in enumerate(uploaded_results):
+        details = data.split("\n")
+        uploaded_table_data.append([uploaded_files[idx].name] + details)
+    
+    uploaded_df = pd.DataFrame(uploaded_table_data, columns=["Invoice Image", "Company Name", "Total Amount", "Expense Type", "Approval Status"])
+    st.subheader("Uploaded Invoices Analysis")
+    st.dataframe(uploaded_df)
