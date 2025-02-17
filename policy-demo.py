@@ -79,7 +79,7 @@ if image_paths:
     extracted_data = process_images(image_paths)
     
     for idx, details in enumerate(extracted_data):
-        st.write(f"Invoice: {image_paths[idx].split('/')[-1]")
+        st.write(f"Invoice: {os.path.basename(image_paths[idx])}")
         st.write(details)
         st.write("---")
 
