@@ -62,7 +62,7 @@ def process_images(image_paths):
         with open(image_path, "rb") as img_file:
             image_data = [{"mime_type": "image/jpeg", "data": img_file.read()}]
         response = get_gemini_response(image_data, policy_rules)
-        results.append(response)
+        results.append(response.split("\n"))  # Ensure each response is split into list format
     return results
 
 # Streamlit App
@@ -81,9 +81,9 @@ if image_paths:
     
     # Convert extracted data into a structured format
     table_data = []
-    for idx, data in enumerate(extracted_data):
-        details = data.split("\n")  # Assuming newline-separated output
-        table_data.append([image_paths[idx].split("/")[-1]] + details)
+    for idx, details in enumerate(extracted_data):
+        if len(details) >= 4:  # Ensure enough elements exist before indexing
+            table_data.append([image_paths[idx].split("/")[-1]] + details[:4])
     
     # Convert to DataFrame for display
     df = pd.DataFrame(table_data, columns=["Invoice Image", "Company Name", "Total Amount", "Expense Type", "Approval Status"])
@@ -99,13 +99,13 @@ if uploaded_files:
         image_data = input_image_setup(uploaded_file)
         if image_data:
             response = get_gemini_response(image_data, policy_rules)
-            uploaded_results.append(response)
+            uploaded_results.append(response.split("\n"))  # Ensure splitting into list
     
     # Convert uploaded data into a structured format
     uploaded_table_data = []
-    for idx, data in enumerate(uploaded_results):
-        details = data.split("\n")
-        uploaded_table_data.append([uploaded_files[idx].name] + details)
+    for idx, details in enumerate(uploaded_results):
+        if len(details) >= 4:  # Ensure correct indexing
+            uploaded_table_data.append([uploaded_files[idx].name] + details[:4])
     
     uploaded_df = pd.DataFrame(uploaded_table_data, columns=["Invoice Image", "Company Name", "Total Amount", "Expense Type", "Approval Status"])
     st.subheader("Uploaded Invoices Analysis")
