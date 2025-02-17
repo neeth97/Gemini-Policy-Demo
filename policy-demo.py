@@ -23,7 +23,7 @@ def extract_rules_from_docx(file_path):
     return "\n".join(rules)
 
 # Extract rules from the local policy document
-policy_document_path = "policy-document.docx"
+policy_document_path = "ExpenseNow Sample Expense Policy.docx"
 policy_rules = extract_rules_from_docx(policy_document_path)
 
 # Function to get AI response
