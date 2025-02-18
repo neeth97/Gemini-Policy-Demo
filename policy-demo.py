@@ -5,13 +5,13 @@ import glob
 from PIL import Image
 import google.generativeai as genai
 import docx
+import pandas as pd
 
 # Load environment variables
 load_dotenv()
 
 # Configure API Key
 google_api_key = os.getenv("GEMINI_API_KEY")
-
 genai.configure(api_key=google_api_key)
 
 # Function to extract rules from the policy document
@@ -68,6 +68,9 @@ def process_images(image_paths):
 st.set_page_config(page_title="Invoice Analyzer")
 st.header("Invoice Analysis with Gemini AI")
 
+# Data storage for table
+invoice_data = []
+
 # Process all images in /sample-invoice folder
 image_folder = "./sample-invoice"
 image_paths = glob.glob(os.path.join(image_folder, "*.jpg")) + \
@@ -79,9 +82,16 @@ if image_paths:
     extracted_data = process_images(image_paths)
     
     for idx, details in enumerate(extracted_data):
-        st.write(f"Invoice: {os.path.basename(image_paths[idx])}")
-        st.write(details)
-        st.write("---")
+        # Parse details from AI response
+        lines = details.split('\n')
+        company_name = lines[0].split(':')[-1].strip() if len(lines) > 0 else "N/A"
+        amount_spent = lines[1].split(':')[-1].strip() if len(lines) > 1 else "N/A"
+        expense_type = lines[2].split(':')[-1].strip() if len(lines) > 2 else "N/A"
+        approval_status = lines[3].split(':')[-1].strip() if len(lines) > 3 else "N/A"
+        reason = lines[4].split(':')[-1].strip() if len(lines) > 4 else "N/A"
+        
+        # Add extracted data to the table list
+        invoice_data.append([idx + 1, company_name, amount_spent, expense_type, approval_status, reason])
 
 # Upload additional invoices
 st.subheader("Upload More Invoices for Analysis")
@@ -92,6 +102,20 @@ if uploaded_files:
         image_data = input_image_setup(uploaded_file)
         if image_data:
             response = get_gemini_response(image_data, policy_rules)
-            st.write(f"Uploaded Invoice: {uploaded_file.name}")
-            st.write(response)
-            st.write("---")
+            
+            # Parse the response and append it to the table data
+            lines = response.split('\n')
+            company_name = lines[0].split(':')[-1].strip() if len(lines) > 0 else "N/A"
+            amount_spent = lines[1].split(':')[-1].strip() if len(lines) > 1 else "N/A"
+            expense_type = lines[2].split(':')[-1].strip() if len(lines) > 2 else "N/A"
+            approval_status = lines[3].split(':')[-1].strip() if len(lines) > 3 else "N/A"
+            reason = lines[4].split(':')[-1].strip() if len(lines) > 4 else "N/A"
+            
+            # Add to invoice data table
+            invoice_data.append([len(invoice_data) + 1, company_name, amount_spent, expense_type, approval_status, reason])
+
+# Display results in a table format
+if invoice_data:
+    st.subheader("Invoice Analysis Results")
+    df = pd.DataFrame(invoice_data, columns=["S.No", "Company Name", "Amount", "Expense Type", "Approved or Not", "Reason for Approval/Not"])
+    st.dataframe(df)
