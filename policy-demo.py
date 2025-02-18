@@ -38,10 +38,10 @@ def get_gemini_response(image, rules):
     {rules}
     
     Extract the following details from the invoice:
-    1) Identify where the invoice is from (company name) - One word.
-    2) Identify and print the total amount spent - One word.
-    3) Determine the nature of the bill (Restaurant, Travel Expense, or Accommodation) - One word.
-    4) Based on the policy rules, decide whether the expense should be approved or not - One word with a one-sentence explanation (under 15 words).
+    1) Identify where the invoice is from (company name) - Company Name: One word.
+    2) Identify and print the total amount spent - Amount Spent: One word.
+    3) Determine the nature of the bill (Restaurant, Travel Expense, or Accommodation) - Expense Type: One word.
+    4) Based on the policy rules, decide whether the expense should be approved or not - One word. (If invoice not approved, mention the reason in under 10 words.)
     """
     model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
     response = model.generate_content([prompt, image[0]])
