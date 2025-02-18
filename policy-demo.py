@@ -1,16 +1,17 @@
 from dotenv import load_dotenv
 import streamlit as st
 import os
+import glob
 from PIL import Image
 import google.generativeai as genai
 import docx
+import pandas as pd
 
 # Load environment variables
 load_dotenv()
 
 # Configure API Key
 google_api_key = os.getenv("GEMINI_API_KEY")
-
 genai.configure(api_key=google_api_key)
 
 # Function to extract rules from the policy document
@@ -23,7 +24,7 @@ def extract_rules_from_docx(file_path):
     return "\n".join(rules)
 
 # Extract rules from the local policy document
-policy_document_path = "policy-document.docx"
+policy_document_path = "ExpenseNow Sample Expense Policy.docx"
 policy_rules = extract_rules_from_docx(policy_document_path)
 
 # Function to get AI response
@@ -37,10 +38,10 @@ def get_gemini_response(image, rules):
     {rules}
     
     Extract the following details from the invoice:
-    1) Identify where the invoice is from (company name).
-    2) Identify and print the total amount spent.
-    3) Determine the nature of the bill (Restaurant, Travel Expense, or Accommodation).
-    4) Based on the policy rules, decide whether the expense should be approved or not.
+    1) Identify where the invoice is from (company name) - Company Name: One word.
+    2) Identify and print the total amount spent - Amount Spent: One word.
+    3) Determine the nature of the bill (Restaurant, Travel Expense, or Accommodation) - Expense Type: One word.
+    4) Based on the policy rules, decide whether the expense should be approved or not - One word. (If invoice not approved, mention the reason in under 10 words.)
     """
     model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
     response = model.generate_content([prompt, image[0]])
@@ -53,18 +54,68 @@ def input_image_setup(uploaded_file):
         return [{"mime_type": uploaded_file.type, "data": bytes_data}]
     return None
 
+# Function to process multiple images
+def process_images(image_paths):
+    results = []
+    for image_path in image_paths:
+        with open(image_path, "rb") as img_file:
+            image_data = [{"mime_type": "image/jpeg", "data": img_file.read()}]
+        response = get_gemini_response(image_data, policy_rules)
+        results.append(response)  # Store response as a string
+    return results
+
 # Streamlit App
 st.set_page_config(page_title="Invoice Analyzer")
 st.header("Invoice Analysis with Gemini AI")
 
-uploaded_file = st.file_uploader("Upload an invoice image...", type=["jpg", "jpeg", "png"])
+# Data storage for table
+invoice_data = []
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Invoice.", width=300)
+# Process all images in /sample-invoice folder
+image_folder = "./sample-invoice"
+image_paths = glob.glob(os.path.join(image_folder, "*.jpg")) + \
+               glob.glob(os.path.join(image_folder, "*.jpeg")) + \
+               glob.glob(os.path.join(image_folder, "*.png"))
+
+if image_paths:
+    st.subheader("Processing Invoices from /sample-invoice Folder")
+    extracted_data = process_images(image_paths)
     
-    image_data = input_image_setup(uploaded_file)
-    if image_data:
-        response = get_gemini_response(image_data, policy_rules)
-        st.subheader("Extracted Invoice Details:")
-        st.write(response)
+    for idx, details in enumerate(extracted_data):
+        # Parse details from AI response
+        lines = details.split('\n')
+        company_name = lines[0].split(':')[-1].strip() if len(lines) > 0 else "N/A"
+        amount_spent = lines[1].split(':')[-1].strip() if len(lines) > 1 else "N/A"
+        expense_type = lines[2].split(':')[-1].strip() if len(lines) > 2 else "N/A"
+        approval_status = lines[3].split(':')[-1].strip() if len(lines) > 3 else "N/A"
+        reason = lines[4].split(':')[-1].strip() if len(lines) > 4 else "N/A"
+        
+        # Add extracted data to the table list
+        invoice_data.append([idx + 1, company_name, amount_spent, expense_type, approval_status, reason])
+
+# Upload additional invoices
+st.subheader("Upload More Invoices for Analysis")
+uploaded_files = st.file_uploader("Upload invoice images...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        image_data = input_image_setup(uploaded_file)
+        if image_data:
+            response = get_gemini_response(image_data, policy_rules)
+            
+            # Parse the response and append it to the table data
+            lines = response.split('\n')
+            company_name = lines[0].split(':')[-1].strip() if len(lines) > 0 else "N/A"
+            amount_spent = lines[1].split(':')[-1].strip() if len(lines) > 1 else "N/A"
+            expense_type = lines[2].split(':')[-1].strip() if len(lines) > 2 else "N/A"
+            approval_status = lines[3].split(':')[-1].strip() if len(lines) > 3 else "N/A"
+            reason = lines[4].split(':')[-1].strip() if len(lines) > 4 else "N/A"
+            
+            # Add to invoice data table
+            invoice_data.append([len(invoice_data) + 1, company_name, amount_spent, expense_type, approval_status, reason])
+
+# Display results in a table format
+if invoice_data:
+    st.subheader("Invoice Analysis Results")
+    df = pd.DataFrame(invoice_data, columns=["S.No", "Company Name", "Amount", "Expense Type", "Approved or Not", "Reason for Approval/Not"])
+    st.dataframe(df)
