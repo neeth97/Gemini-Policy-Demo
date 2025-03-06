@@ -14,27 +14,43 @@ google_api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=google_api_key)
 
-# Function to extract rules from the policy document
-def extract_rules_from_docx(file_path):
+# Function to categorize policy rules from document using Gemini AI
+def categorize_policy_rules(file_path):
     doc = docx.Document(file_path)
-    rules = []
-    for para in doc.paragraphs:
-        if para.text.strip():
-            rules.append(para.text.strip())
-    return "\n".join(rules)
+    policy_text = "\n".join([para.text.strip() for para in doc.paragraphs if para.text.strip()])
+    
+    prompt = f"""
+    You are an AI assistant trained to analyze and categorize company expense policies.
+    Given the following policy document, categorize the rules into distinct sections:
+    
+    1) Acceptable types of receipts
+    2) Spending limits and restrictions
+    3) Approval criteria
+    4) Reimbursement process
+    5) Any additional relevant categories
+    
+    Policy Document:
+    {policy_text}
+    
+    Return the categorized rules in a structured format.
+    """
+    
+    model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
+    response = model.generate_content([prompt])
+    return response.text
 
-# Extract rules from the local policy document
+# Extract and categorize rules from the local policy document
 policy_document_path = "ExpenseNow Sample Expense Policy.docx"
-policy_rules = extract_rules_from_docx(policy_document_path)
+categorized_policy_rules = categorize_policy_rules(policy_document_path)
 
-# Function to get AI response
+# Function to get AI response based on categorized rules
 def get_gemini_response(image, rules):
     prompt = f"""
     You are an expert in understanding invoices and company policies.
-    You will receive an invoice image and a set of policy rules.
+    You will receive an invoice image and a set of policy rules relevant to the expense type.
     Your task is to extract and validate the invoice details based on the rules.
     
-    Policy Rules:
+    Relevant Policy Rules:
     {rules}
     
     Extract the following details from the invoice:
@@ -60,7 +76,7 @@ def process_images(image_paths):
     for image_path in image_paths:
         with open(image_path, "rb") as img_file:
             image_data = [{"mime_type": "image/jpeg", "data": img_file.read()}]
-        response = get_gemini_response(image_data, policy_rules)
+        response = get_gemini_response(image_data, categorized_policy_rules)
         results.append(response)  # Store response as a string
     return results
 
@@ -91,7 +107,7 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         image_data = input_image_setup(uploaded_file)
         if image_data:
-            response = get_gemini_response(image_data, policy_rules)
+            response = get_gemini_response(image_data, categorized_policy_rules)
             st.write(f"Uploaded Invoice: {uploaded_file.name}")
             st.write(response)
             st.write("---")
